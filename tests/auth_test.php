@@ -27,7 +27,7 @@ namespace auth_saml2;
  * @copyright   2021 Moodle Pty Ltd <support@moodle.com>
  * @license     http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class auth_saml2_test extends \advanced_testcase {
+class auth_test extends \advanced_testcase {
     /**
      * Set up
      */
@@ -433,6 +433,41 @@ class auth_saml2_test extends \advanced_testcase {
         $event = array_pop($events);
         $this->assertInstanceOf('\core\event\user_login_failed', $event);
         $this->assertEquals(AUTH_LOGIN_NOUSER, $event->get_data()['other']['reason']);
+    }
+
+    public function test_saml_login_complete_secondary_mapping_used(): void {
+        global $USER;
+
+        $attribs = [
+            'uid' => ['doesnotmatch'],
+            'email' => ['anything@example.com'],
+            'someidfield' => ['must-match-12345'],
+        ];
+
+        $user = $this->getDataGenerator()->create_user([
+            'auth' => 'saml2',
+            'email' => 'notrelevant@example.com',
+            'idnumber' => 'must-match-12345',
+        ]);
+
+        // The primary was set up to fail.
+        set_config('idpattr', 'uid', 'auth_saml2');
+        set_config('mdlattr', 'email', 'auth_saml2');
+        // The secondary mapping should match and map to the generated user.
+        set_config('idpattrsecondary', 'someidfield', 'auth_saml2');
+        set_config('mdlattrsecondary', 'idnumber', 'auth_saml2');
+
+        // Sanity check.
+        $this->assertFalse(isloggedin());
+        $this->assertNotEquals($attribs['email'][0], $user->email);
+
+        // Try to login, suppress output.
+        $auth = new \auth_saml2\auth();
+        @$auth->saml_login_complete($attribs);
+
+        // Check global object, make sure the created user is the one logged in, despite other non-matching attributes provided.
+        $this->assertEquals($user->id, $USER->id);
+        $this->assertEquals($user->username, $USER->username);
     }
 
     public function test_saml_login_complete_group_restriction(): void {

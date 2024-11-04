@@ -314,6 +314,20 @@ if ($ADMIN->fulltree) {
             saml2_settings::OPTION_TOLOWER_EXACT,
             $toloweroptions));
 
+    // IDP attribute (secondary).
+    $settings->add(new admin_setting_configtext(
+            'auth_saml2/idpattrsecondary',
+            get_string('idpattrsecondary', 'auth_saml2'),
+            get_string('idpattrsecondary_help', 'auth_saml2'),
+            '', PARAM_TEXT));
+
+    // Moodle Field (secondary).
+    $settings->add(new admin_setting_configselect(
+            'auth_saml2/mdlattrsecondary',
+            get_string('mdlattrsecondary', 'auth_saml2'),
+            get_string('mdlattrsecondary_help', 'auth_saml2'),
+            '', user_fields::get_supported_fields()));
+
     // Requested Attributes.
     $settings->add(new admin_setting_configtextarea(
         'auth_saml2/requestedattributes',

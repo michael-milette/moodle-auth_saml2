@@ -672,8 +672,9 @@ class auth extends \auth_plugin_base {
         }
 
         $attr = $this->config->idpattr;
+        $attrsecondary = $this->config->idpattrsecondary;
         if (empty($attributes[$attr])) {
-            // Missing mapping IdP attribute. Login failed.
+            // Missing mapping IdP attribute (both primary and secondary). Login failed.
             $event = \core\event\user_login_failed::create(['other' => ['username' => 'unknown',
                 'reason' => AUTH_LOGIN_NOUSER]]);
             $event->trigger();
@@ -690,26 +691,15 @@ class auth extends \auth_plugin_base {
 
         // Find Moodle user.
         $user = false;
-        foreach ($attributes[$attr] as $uid) {
-            $insensitive = false;
-            $accentsensitive = true;
-            if ($this->config->tolower == saml2_settings::OPTION_TOLOWER_LOWER_CASE) {
-                $this->log(__FUNCTION__ . " to lowercase for $uid");
-                $uid = strtolower($uid);
-            }
-            if ($this->config->tolower == saml2_settings::OPTION_TOLOWER_CASE_INSENSITIVE) {
-                $this->log(__FUNCTION__ . " case insensitive compare for $uid");
-                $insensitive = true;
-            }
-            if ($this->config->tolower == saml2_settings::OPTION_TOLOWER_CASE_AND_ACCENT_INSENSITIVE) {
-                $this->log(__FUNCTION__ . " case and accent insensitive compare for $uid");
-                $insensitive = true;
-                $accentsensitive = false;
-            }
-            if ($user = user_extractor::get_user($this->config->mdlattr, $uid, $insensitive, $accentsensitive)) {
-                // We found a user.
-                break;
-            }
+
+        // Primary IdP attribute mapping.
+        if (!empty($attributes[$attr])) {
+            [$user, $uid] = $this->find_user_by_attributes($attributes[$attr], $this->config->mdlattr);
+        }
+
+        // Secondary IdP attribute mapping (if user not found yet).
+        if ($user === false && !empty($attributes[$attrsecondary])) {
+            [$user, $uid] = $this->find_user_by_attributes($attributes[$attrsecondary], $this->config->mdlattrsecondary);
         }
 
         // Moodle Workplace - Check IdP's tenant availability, for new user pre-allocate to tenant.
@@ -1344,4 +1334,41 @@ class auth extends \auth_plugin_base {
             }
         }
     }
+
+    /**
+     * Find and return a user matched using a list of provided attributes, against a Moodle field.
+     *
+     * Applies any case matching settings configured.
+     *
+     * @param array $idpattrs
+     * @param string $mdlattr
+     * @return array false if no user found, otherwise the user object, and the $uid of the iterated user
+     */
+    private function find_user_by_attributes(array $idpattrs, string $mdlattr): array {
+        $user = false;
+        $uid = null;
+        foreach ($idpattrs as $uid) {
+            $insensitive = false;
+            $accentsensitive = true;
+            if ($this->config->tolower == saml2_settings::OPTION_TOLOWER_LOWER_CASE) {
+                $this->log(__FUNCTION__ . " to lowercase for $uid");
+                $uid = strtolower($uid);
+            }
+            if ($this->config->tolower == saml2_settings::OPTION_TOLOWER_CASE_INSENSITIVE) {
+                $this->log(__FUNCTION__ . " case insensitive compare for $uid");
+                $insensitive = true;
+            }
+            if ($this->config->tolower == saml2_settings::OPTION_TOLOWER_CASE_AND_ACCENT_INSENSITIVE) {
+                $this->log(__FUNCTION__ . " case and accent insensitive compare for $uid");
+                $insensitive = true;
+                $accentsensitive = false;
+            }
+            if ($user = user_extractor::get_user($mdlattr, $uid, $insensitive, $accentsensitive)) {
+                // We found a user.
+                break;
+            }
+        }
+        return [$user, $uid];
+    }
+
 }
